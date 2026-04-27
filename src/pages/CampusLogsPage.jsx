@@ -1,0 +1,74 @@
+﻿import { useEffect, useMemo, useState } from 'react'
+import Card from '../components/shared/Card'
+import EmptyState from '../components/shared/EmptyState'
+import { getCampusLogs } from '../services/campusLogsService'
+
+function CampusLogsPage() {
+  const [logs, setLogs] = useState([])
+  const [filter, setFilter] = useState('All')
+
+  useEffect(() => {
+    async function loadLogs() {
+      const data = await getCampusLogs()
+      setLogs(data)
+    }
+    loadLogs()
+  }, [])
+
+  const filteredLogs = useMemo(() => {
+    const sortedLogs = [...logs].sort((a, b) => {
+      return new Date(b.time).getTime() - new Date(a.time).getTime()
+    })
+
+    if (filter === 'All') return sortedLogs
+    return sortedLogs.filter((log) => log.action === filter)
+  }, [logs, filter])
+
+  return (
+    <div className="page-content campus-logs-page">
+      <section className="campus-header">
+        <div className="campus-header-row">
+          <span className="campus-back">←</span>
+          <h2>Campus Logs</h2>
+        </div>
+      </section>
+
+      <div className="campus-filters">
+        {['All', 'IN', 'OUT'].map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={`campus-filter${filter === option ? ' active' : ''}`}
+            onClick={() => setFilter(option)}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+
+      <Card title="Recent Activity">
+        {filteredLogs.length ? (
+          <div className="campus-log-list">
+            {filteredLogs.map((log) => (
+              <article key={log.id} className="campus-log-card">
+                <div className="campus-log-avatar">{log.profilePlaceholder}</div>
+                <div className="campus-log-content">
+                  <small>{log.label}</small>
+                  <h4>{log.name}</h4>
+                  <p>{log.time}</p>
+                </div>
+                <span className={`campus-log-status ${log.action === 'IN' ? 'in' : 'out'}`}>
+                  {log.action}
+                </span>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No logs found" description="Try changing the filter." />
+        )}
+      </Card>
+    </div>
+  )
+}
+
+export default CampusLogsPage

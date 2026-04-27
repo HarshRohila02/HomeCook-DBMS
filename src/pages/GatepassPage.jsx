@@ -1,0 +1,165 @@
+﻿import { useEffect, useMemo, useState } from 'react'
+import Button from '../components/shared/Button'
+import Card from '../components/shared/Card'
+import EmptyState from '../components/shared/EmptyState'
+import Modal from '../components/shared/Modal'
+import SearchBar from '../components/shared/SearchBar'
+import { getGatepasses } from '../services/gatepassService'
+
+function GatepassPage() {
+  const [query, setQuery] = useState('')
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [gatepasses, setGatepasses] = useState([])
+
+  const [reason, setReason] = useState('')
+  const [destination, setDestination] = useState('')
+  const [date, setDate] = useState('')
+  const [timeOut, setTimeOut] = useState('')
+  const [expectedReturn, setExpectedReturn] = useState('')
+
+  useEffect(() => {
+    async function loadGatepasses() {
+      const data = await getGatepasses()
+      setGatepasses(data)
+    }
+    loadGatepasses()
+  }, [])
+
+  const records = useMemo(() => {
+    return gatepasses.filter((row) =>
+      `${row.id} ${row.destination} ${row.reason} ${row.status}`.toLowerCase().includes(query.toLowerCase()),
+    )
+  }, [gatepasses, query])
+
+  function openRequestModal() {
+    setReason('')
+    setDestination('')
+    setDate('')
+    setTimeOut('')
+    setExpectedReturn('')
+    setIsModalOpen(true)
+  }
+
+  function closeRequestModal() {
+    setIsModalOpen(false)
+  }
+
+  function submitGatepass(event) {
+    event.preventDefault()
+    const nextId = `GP-${Math.floor(1000 + Math.random() * 9000)}`
+    const nextRequest = {
+      id: nextId,
+      reason: reason.trim(),
+      destination: destination.trim(),
+      date,
+      timeOut,
+      expectedReturn,
+      status: 'Requested',
+    }
+
+    setGatepasses((prev) => [nextRequest, ...prev])
+    closeRequestModal()
+  }
+
+  return (
+    <div className="page-content gatepass-page">
+      <section className="gatepass-header">
+        <div className="gatepass-header-row">
+          <span className="gatepass-back">←</span>
+          <h2>Gatepass</h2>
+        </div>
+      </section>
+
+      <section className="gatepass-hero">
+        <div>
+          <h3>Campus Gatepass</h3>
+          <p>Manage your campus gatepass requests</p>
+        </div>
+        <div className="gatepass-illustration">Security illustration</div>
+      </section>
+
+      <SearchBar value={query} onChange={setQuery} placeholder="Search by gatepass ID" />
+
+      <Card
+        title="Gatepass Requests"
+        action={<Button onClick={openRequestModal}>Request Gatepass</Button>}
+      >
+        {records.length ? (
+          <div className="item-list">
+            {records.map((item) => (
+              <article key={item.id} className="gatepass-card-row">
+                <div>
+                  <h4>{item.id}</h4>
+                  <p>Destination: {item.destination}</p>
+                  <p>Reason: {item.reason}</p>
+                  <small>
+                    {item.date} • Out: {item.timeOut} • Return: {item.expectedReturn}
+                  </small>
+                </div>
+                <span className="gatepass-status">{item.status}</span>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="No gatepasses found"
+            description="Your gatepass requests will appear here"
+          />
+        )}
+      </Card>
+
+      <Modal isOpen={isModalOpen} title="Request Gatepass" onClose={closeRequestModal}>
+        <form className="review-form" onSubmit={submitGatepass}>
+          <label htmlFor="gatepass-reason">Reason</label>
+          <input
+            id="gatepass-reason"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            required
+          />
+
+          <label htmlFor="gatepass-destination">Destination</label>
+          <input
+            id="gatepass-destination"
+            value={destination}
+            onChange={(event) => setDestination(event.target.value)}
+            required
+          />
+
+          <label htmlFor="gatepass-date">Date</label>
+          <input
+            id="gatepass-date"
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            required
+          />
+
+          <label htmlFor="gatepass-time-out">Time out</label>
+          <input
+            id="gatepass-time-out"
+            type="time"
+            value={timeOut}
+            onChange={(event) => setTimeOut(event.target.value)}
+            required
+          />
+
+          <label htmlFor="gatepass-return-time">Expected return time</label>
+          <input
+            id="gatepass-return-time"
+            type="time"
+            value={expectedReturn}
+            onChange={(event) => setExpectedReturn(event.target.value)}
+            required
+          />
+
+          <div className="review-submit">
+            <Button type="submit">Submit</Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  )
+}
+
+export default GatepassPage
