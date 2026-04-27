@@ -5,12 +5,18 @@ import { getUserProfile } from '../services/userService'
 function ProfilePage() {
   const [profile, setProfile] = useState(null)
   const [actions, setActions] = useState([])
+  const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
     async function loadProfile() {
-      const data = await getUserProfile()
-      setProfile(data.profileSummary)
-      setActions(data.profileActions)
+      setErrorMessage('')
+      try {
+        const data = await getUserProfile()
+        setProfile(data.profileSummary)
+        setActions(data.profileActions)
+      } catch {
+        setErrorMessage('Unable to load profile right now.')
+      }
     }
     loadProfile()
   }, [])
@@ -32,6 +38,8 @@ function ProfilePage() {
         </div>
         <div className="profile-avatar">{profile.avatarPlaceholder}</div>
       </section>
+
+      {errorMessage ? <p className="header-meta">{errorMessage}</p> : null}
 
       <Card>
         <div className="profile-main-card">

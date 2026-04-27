@@ -4,9 +4,11 @@ import Card from '../components/shared/Card'
 import EmptyState from '../components/shared/EmptyState'
 import Modal from '../components/shared/Modal'
 import SearchBar from '../components/shared/SearchBar'
+import { getCurrentUser } from '../services/authService'
 import { createLostFoundItem, getLostFoundData } from '../services/lostFoundService'
 
 function LostFoundPage() {
+  const currentUserId = Number(getCurrentUser()?.id) || 1
   const [activeTab, setActiveTab] = useState('Found')
   const [query, setQuery] = useState('')
   const [showAllFound, setShowAllFound] = useState(false)
@@ -98,7 +100,7 @@ function LostFoundPage() {
 
     try {
       const createdItem = await createLostFoundItem({
-        created_by_user_id: 1,
+        created_by_user_id: currentUserId,
         item_name: itemName.trim(),
         location: location.trim(),
         status,

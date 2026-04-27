@@ -4,8 +4,10 @@ import Card from '../components/shared/Card'
 import Modal from '../components/shared/Modal'
 import EmptyState from '../components/shared/EmptyState'
 import { getMessMenu, submitMessReview } from '../services/messService'
+import { getCurrentUser } from '../services/authService'
 
 function MessMenuPage() {
+  const currentUserId = Number(getCurrentUser()?.id) || 1
   const [dateOptions, setDateOptions] = useState([])
   const [menuByDate, setMenuByDate] = useState({})
   const [activeDate, setActiveDate] = useState('')
@@ -83,7 +85,7 @@ function MessMenuPage() {
     try {
       if (selectedMeal.messMenuId) {
         await submitMessReview({
-          user_id: 1,
+          user_id: currentUserId,
           mess_menu_id: selectedMeal.messMenuId,
           rating: safeRating,
           review_text: feedbackInput,

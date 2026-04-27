@@ -1,9 +1,11 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Card from '../components/shared/Card'
+import { getCurrentUser } from '../services/authService'
 import { getDashboardData } from '../services/dashboardService'
 
 function DashboardPage() {
+  const currentUser = getCurrentUser()
   const [dashboardData, setDashboardData] = useState({
     heroData: null,
     quickModules: [],
@@ -40,7 +42,7 @@ function DashboardPage() {
       <section className="dashboard-hero">
         <div>
           <p className="dashboard-hero-greeting">{dashboardData.heroData.greeting}</p>
-          <h2>{dashboardData.heroData.studentName}</h2>
+          <h2>{currentUser?.full_name ?? dashboardData.heroData.studentName}</h2>
           <div className="dashboard-hero-meta">
             <span>{dashboardData.heroData.dateLabel}</span>
             <span>{dashboardData.heroData.weatherIcon}</span>

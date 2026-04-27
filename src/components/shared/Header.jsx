@@ -1,6 +1,16 @@
-﻿import { profileSummary } from '../../data/profileData'
+﻿import { useNavigate } from 'react-router-dom'
+import { profileSummary } from '../../data/profileData'
+import { getCurrentUser, logout } from '../../services/authService'
 
 function Header({ onMenuToggle }) {
+  const navigate = useNavigate()
+  const currentUser = getCurrentUser()
+
+  function handleLogout() {
+    logout()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <header className="header">
       <button
@@ -13,9 +23,14 @@ function Header({ onMenuToggle }) {
       </button>
       <div>
         <h1>Unisphere Web</h1>
-        <div className="header-meta">Modern campus dashboard (dummy data mode)</div>
+        <div className="header-meta">Modern campus dashboard</div>
       </div>
-      <div className="header-meta">{profileSummary.name}</div>
+      <div className="header-user">
+        <span className="header-meta">{currentUser?.full_name ?? profileSummary.name}</span>
+        <button type="button" className="btn btn-ghost" onClick={handleLogout}>
+          Logout
+        </button>
+      </div>
     </header>
   )
 }

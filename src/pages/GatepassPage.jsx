@@ -4,12 +4,16 @@ import Card from '../components/shared/Card'
 import EmptyState from '../components/shared/EmptyState'
 import Modal from '../components/shared/Modal'
 import SearchBar from '../components/shared/SearchBar'
-import { getGatepasses } from '../services/gatepassService'
+import { getCurrentUser } from '../services/authService'
+import { createGatepass, getGatepasses } from '../services/gatepassService'
 
 function GatepassPage() {
+  const currentUserId = Number(getCurrentUser()?.id) || 1
   const [query, setQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [gatepasses, setGatepasses] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState('')
 
   const [reason, setReason] = useState('')
   const [destination, setDestination] = useState('')
@@ -19,8 +23,16 @@ function GatepassPage() {
 
   useEffect(() => {
     async function loadGatepasses() {
-      const data = await getGatepasses()
-      setGatepasses(data)
+      setIsLoading(true)
+      setErrorMessage('')
+      try {
+        const data = await getGatepasses()
+        setGatepasses(data)
+      } catch {
+        setErrorMessage('Unable to load gatepasses right now.')
+      } finally {
+        setIsLoading(false)
+      }
     }
     loadGatepasses()
   }, [])
@@ -44,20 +56,35 @@ function GatepassPage() {
     setIsModalOpen(false)
   }
 
-  function submitGatepass(event) {
+  async function submitGatepass(event) {
     event.preventDefault()
-    const nextId = `GP-${Math.floor(1000 + Math.random() * 9000)}`
+    const randomId = Math.floor(1000 + Math.random() * 9000)
     const nextRequest = {
-      id: nextId,
+      id: `GP-${randomId}`,
       reason: reason.trim(),
       destination: destination.trim(),
       date,
       timeOut,
       expectedReturn,
-      status: 'Requested',
+      status: 'Pending',
     }
 
-    setGatepasses((prev) => [nextRequest, ...prev])
+    try {
+      const created = await createGatepass({
+        user_id: currentUserId,
+        reason: reason.trim(),
+        destination: destination.trim(),
+        date,
+        time_out: timeOut,
+        expected_return_time: expectedReturn,
+      })
+      setGatepasses((prev) => [created, ...prev])
+      setErrorMessage('')
+    } catch {
+      setGatepasses((prev) => [nextRequest, ...prev])
+      setErrorMessage('Saved locally because backend is unavailable.')
+    }
+
     closeRequestModal()
   }
 
@@ -79,34 +106,39 @@ function GatepassPage() {
       </section>
 
       <SearchBar value={query} onChange={setQuery} placeholder="Search by gatepass ID" />
+      {errorMessage ? <p className="header-meta">{errorMessage}</p> : null}
 
-      <Card
-        title="Gatepass Requests"
-        action={<Button onClick={openRequestModal}>Request Gatepass</Button>}
-      >
-        {records.length ? (
-          <div className="item-list">
-            {records.map((item) => (
-              <article key={item.id} className="gatepass-card-row">
-                <div>
-                  <h4>{item.id}</h4>
-                  <p>Destination: {item.destination}</p>
-                  <p>Reason: {item.reason}</p>
-                  <small>
-                    {item.date} • Out: {item.timeOut} • Return: {item.expectedReturn}
-                  </small>
-                </div>
-                <span className="gatepass-status">{item.status}</span>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            title="No gatepasses found"
-            description="Your gatepass requests will appear here"
-          />
-        )}
-      </Card>
+      {isLoading ? (
+        <Card title="Gatepass Requests">Loading gatepasses...</Card>
+      ) : (
+        <Card
+          title="Gatepass Requests"
+          action={<Button onClick={openRequestModal}>Request Gatepass</Button>}
+        >
+          {records.length ? (
+            <div className="item-list">
+              {records.map((item) => (
+                <article key={item.id} className="gatepass-card-row">
+                  <div>
+                    <h4>{item.id}</h4>
+                    <p>Destination: {item.destination}</p>
+                    <p>Reason: {item.reason}</p>
+                    <small>
+                      {item.date} • Out: {item.timeOut} • Return: {item.expectedReturn}
+                    </small>
+                  </div>
+                  <span className="gatepass-status">{item.status}</span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="No gatepasses found"
+              description="Your gatepass requests will appear here"
+            />
+          )}
+        </Card>
+      )}
 
       <Modal isOpen={isModalOpen} title="Request Gatepass" onClose={closeRequestModal}>
         <form className="review-form" onSubmit={submitGatepass}>

@@ -8,11 +8,33 @@ import LostFoundPage from './pages/LostFoundPage'
 import GatepassPage from './pages/GatepassPage'
 import ShuttlePage from './pages/ShuttlePage'
 import CampusLogsPage from './pages/CampusLogsPage'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+import { getCurrentUser } from './services/authService'
+
+function ProtectedLayout() {
+  const currentUser = getCurrentUser()
+  if (!currentUser) {
+    return <Navigate to="/login" replace />
+  }
+  return <AppShell />
+}
 
 function App() {
+  const currentUser = getCurrentUser()
+
   return (
     <Routes>
-      <Route element={<AppShell />}>
+      <Route
+        path="/login"
+        element={currentUser ? <Navigate to="/" replace /> : <LoginPage />}
+      />
+      <Route
+        path="/register"
+        element={currentUser ? <Navigate to="/" replace /> : <RegisterPage />}
+      />
+
+      <Route element={<ProtectedLayout />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/mess-menu" element={<MessMenuPage />} />

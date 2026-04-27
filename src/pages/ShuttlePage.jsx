@@ -2,38 +2,46 @@
 import Button from '../components/shared/Button'
 import Card from '../components/shared/Card'
 import EmptyState from '../components/shared/EmptyState'
-import { getShuttleSchedule } from '../services/shuttleService'
+import { getCurrentUser } from '../services/authService'
+import { bookShuttle, getBookings, getShuttles } from '../services/shuttleService'
 
 function ShuttlePage() {
   const [activeTab, setActiveTab] = useState('Shuttles')
   const [shuttles, setShuttles] = useState([])
   const [bookings, setBookings] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [bookingMessage, setBookingMessage] = useState('')
+  const userId = Number(getCurrentUser()?.id) || 1
 
   useEffect(() => {
-    async function loadShuttles() {
-      const data = await getShuttleSchedule()
-      setShuttles(data)
+    async function loadData() {
+      setIsLoading(true)
+      setErrorMessage('')
+      try {
+        const [shuttleData, bookingData] = await Promise.all([getShuttles(), getBookings(userId)])
+        setShuttles(shuttleData)
+        setBookings(bookingData)
+      } catch {
+        setErrorMessage('Unable to load shuttle data right now.')
+      } finally {
+        setIsLoading(false)
+      }
     }
-    loadShuttles()
+    loadData()
   }, [])
 
-  const bookedIds = useMemo(() => new Set(bookings.map((booking) => booking.id)), [bookings])
+  const bookedIds = useMemo(() => new Set(bookings.map((booking) => booking.shuttleId)), [bookings])
 
-  function bookShuttle(shuttleId) {
+  async function handleBookShuttle(shuttleId) {
     if (bookedIds.has(shuttleId)) return
     const shuttle = shuttles.find((item) => item.id === shuttleId)
     if (!shuttle || shuttle.seatsAvailable <= 0) return
 
-    setShuttles((prev) =>
-      prev.map((item) =>
-        item.id === shuttleId
-          ? { ...item, seatsAvailable: item.seatsAvailable - 1 }
-          : item,
-      ),
-    )
-
     const nextBooking = {
       ...shuttle,
+      shuttleId,
+      status: 'Booked',
       bookedAt: new Date().toLocaleString('en-GB', {
         day: '2-digit',
         month: 'short',
@@ -41,7 +49,38 @@ function ShuttlePage() {
         minute: '2-digit',
       }),
     }
-    setBookings((prev) => [nextBooking, ...prev])
+
+    try {
+      const createdBooking = await bookShuttle({
+        user_id: userId,
+        shuttle_id: shuttleId,
+      })
+      setBookings((prev) => [createdBooking, ...prev])
+      setShuttles((prev) =>
+        prev.map((item) =>
+          item.id === shuttleId ? { ...item, seatsAvailable: Math.max(0, item.seatsAvailable - 1) } : item,
+        ),
+      )
+      setBookingMessage('')
+    } catch (error) {
+      const message = error?.message || ''
+      const isBusinessRuleFailure =
+        message.toLowerCase().includes('duplicate') || message.toLowerCase().includes('no seats')
+      if (isBusinessRuleFailure) {
+        setBookingMessage(message)
+        return
+      }
+
+      // Preserve existing fallback behavior when backend is unavailable.
+      setBookings((prev) => [nextBooking, ...prev])
+      setShuttles((prev) =>
+        prev.map((item) =>
+          item.id === shuttleId ? { ...item, seatsAvailable: Math.max(0, item.seatsAvailable - 1) } : item,
+        ),
+      )
+      setBookingMessage('Booked locally because backend is unavailable.')
+    }
+
     setActiveTab('Bookings')
   }
 
@@ -71,7 +110,12 @@ function ShuttlePage() {
         </button>
       </div>
 
-      {activeTab === 'Shuttles' ? (
+      {errorMessage ? <p className="header-meta">{errorMessage}</p> : null}
+      {bookingMessage ? <p className="header-meta">{bookingMessage}</p> : null}
+
+      {isLoading ? (
+        <Card title="Shuttle">Loading shuttle data...</Card>
+      ) : activeTab === 'Shuttles' ? (
         <Card title="Available Shuttles">
           {shuttles.length ? (
             <div className="shuttle-list">
@@ -88,7 +132,7 @@ function ShuttlePage() {
                       <small>Seats available: {shuttle.seatsAvailable}</small>
                     </div>
                     <Button
-                      onClick={() => bookShuttle(shuttle.id)}
+                      onClick={() => handleBookShuttle(shuttle.id)}
                       disabled={alreadyBooked || full}
                     >
                       {alreadyBooked ? 'Booked' : full ? 'Full' : 'Book'}
@@ -109,7 +153,7 @@ function ShuttlePage() {
           {bookings.length ? (
             <div className="shuttle-list">
               {bookings.map((booking) => (
-                <article key={`${booking.id}-${booking.bookedAt}`} className="shuttle-card-row">
+                <article key={`${booking.shuttleId}-${booking.bookedAt}`} className="shuttle-card-row">
                   <div>
                     <h4>{booking.route}</h4>
                     <p>

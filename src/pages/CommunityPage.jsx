@@ -11,8 +11,12 @@ import {
   getCommunityPosts,
   likeCommunityPost,
 } from '../services/communityService'
+import { getCurrentUser } from '../services/authService'
 
 function CommunityPage() {
+  const currentUser = getCurrentUser()
+  const currentUserId = Number(currentUser?.id) || 1
+  const currentUserName = currentUser?.full_name || 'Harsh Rohila'
   const [query, setQuery] = useState('')
   const [posts, setPosts] = useState([])
   const [isNewPostOpen, setIsNewPostOpen] = useState(false)
@@ -96,7 +100,7 @@ function CommunityPage() {
 
     try {
       const result = await createCommunityComment(postId, {
-        user_id: 1,
+        user_id: currentUserId,
         comment_text: text,
       })
       setCommentsByPost((prev) => ({
@@ -111,7 +115,7 @@ function CommunityPage() {
     } catch {
       const fallbackComment = {
         id: Date.now(),
-        author: 'Harsh Rohila',
+        author: currentUserName,
         profileImage: 'HR',
         commentText: text,
         createdAt: new Date().toISOString(),
@@ -143,7 +147,7 @@ function CommunityPage() {
 
     try {
       const createdPost = await createCommunityPost({
-        user_id: 1,
+        user_id: currentUserId,
         caption: text,
         image_url: imageUrl.trim(),
       })
@@ -156,8 +160,8 @@ function CommunityPage() {
 
     const newPost = {
       id: Date.now(),
-      userId: 1,
-      author: 'Harsh Rohila',
+      userId: currentUserId,
+      author: currentUserName,
       timeAgo: 'Just now',
       profileImage: 'HR',
       imageUrl: imageUrl.trim(),
@@ -285,7 +289,7 @@ function CommunityPage() {
       <Modal isOpen={isNewPostOpen} title="Create New Post" onClose={() => setIsNewPostOpen(false)}>
         <form className="review-form" onSubmit={submitNewPost}>
           <label htmlFor="community-user">User</label>
-          <input id="community-user" value="Harsh Rohila" disabled />
+          <input id="community-user" value={currentUserName} disabled />
 
           <label htmlFor="community-image-url">Image URL</label>
           <input
