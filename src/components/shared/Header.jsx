@@ -27,6 +27,7 @@ function Header({ onMenuToggle }) {
       </div>
       <div className="header-user">
         <span className="header-meta">{currentUser?.full_name ?? profileSummary.name}</span>
+        {currentUser?.role === 'host' ? <span className="header-role-badge">Host</span> : null}
         <button type="button" className="btn btn-ghost" onClick={handleLogout}>
           Logout
         </button>

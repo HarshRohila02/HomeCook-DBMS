@@ -1,11 +1,14 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Card from '../components/shared/Card'
 import { getCurrentUser } from '../services/authService'
 import { getDashboardData } from '../services/dashboardService'
+import { getLatestCampusStatus } from '../services/gatepassService'
 
 function DashboardPage() {
+  const navigate = useNavigate()
   const currentUser = getCurrentUser()
+  const currentUserId = Number(currentUser?.id) || 1
   const [dashboardData, setDashboardData] = useState({
     heroData: null,
     quickModules: [],
@@ -14,6 +17,7 @@ function DashboardPage() {
     dashboardHighlights: [],
   })
   const [activeMealTab, setActiveMealTab] = useState('')
+  const [campusStatus, setCampusStatus] = useState('IN')
 
   useEffect(() => {
     async function loadDashboard() {
@@ -23,6 +27,14 @@ function DashboardPage() {
     }
     loadDashboard()
   }, [])
+
+  useEffect(() => {
+    async function loadCampusStatus() {
+      const latest = await getLatestCampusStatus(currentUserId)
+      setCampusStatus(latest?.status === 'OUT' ? 'OUT' : 'IN')
+    }
+    loadCampusStatus()
+  }, [currentUserId])
 
   const activeMenuItems = useMemo(
     () => dashboardData.todaysMenu[activeMealTab] ?? [],
@@ -47,13 +59,17 @@ function DashboardPage() {
             <span>{dashboardData.heroData.dateLabel}</span>
             <span>{dashboardData.heroData.weatherIcon}</span>
           </div>
-          <div className="campus-status">
+          <button
+            type="button"
+            className={`campus-status campus-status-btn ${campusStatus === 'OUT' ? 'status-out' : 'status-in'}`}
+            onClick={() => navigate('/campus-logs')}
+          >
             <span className="campus-status-home">🏠</span>
             <div>
-              <strong>{dashboardData.heroData.campusStatus}</strong>
+              <strong>{campusStatus === 'OUT' ? 'OUT CAMPUS' : 'IN CAMPUS'}</strong>
               <small>{dashboardData.heroData.statusLabel}</small>
             </div>
-          </div>
+          </button>
         </div>
         <div className="hero-side">
           <div className="profile-badge">{dashboardData.heroData.profilePlaceholder}</div>

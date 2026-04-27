@@ -10,6 +10,10 @@ import ShuttlePage from './pages/ShuttlePage'
 import CampusLogsPage from './pages/CampusLogsPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import HostDashboardPage from './pages/HostDashboardPage'
+import HostMessManagementPage from './pages/HostMessManagementPage'
+import HostLostFoundClaimsPage from './pages/HostLostFoundClaimsPage'
+import AccessDeniedPage from './pages/AccessDeniedPage'
 import { getCurrentUser } from './services/authService'
 
 function ProtectedLayout() {
@@ -22,6 +26,7 @@ function ProtectedLayout() {
 
 function App() {
   const currentUser = getCurrentUser()
+  const isHost = currentUser?.role === 'host'
 
   return (
     <Routes>
@@ -43,6 +48,15 @@ function App() {
         <Route path="/gatepass" element={<GatepassPage />} />
         <Route path="/shuttle" element={<ShuttlePage />} />
         <Route path="/campus-logs" element={<CampusLogsPage />} />
+        <Route path="/host" element={isHost ? <HostDashboardPage /> : <AccessDeniedPage />} />
+        <Route
+          path="/host/mess-management"
+          element={isHost ? <HostMessManagementPage /> : <AccessDeniedPage />}
+        />
+        <Route
+          path="/host/lost-found-claims"
+          element={isHost ? <HostLostFoundClaimsPage /> : <AccessDeniedPage />}
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

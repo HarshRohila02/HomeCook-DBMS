@@ -1,6 +1,7 @@
 ﻿import { messDateOptions, messMenuByDate } from '../data/messMenuData'
 
 const MESS_API_BASE = 'http://localhost:5000/api/mess'
+const MESS_DATES_API = 'http://localhost:5000/api/mess/dates'
 const MEAL_ORDER = ['Breakfast', 'Lunch', 'Snacks', 'Dinner']
 
 function toShortTime(mysqlTime) {
@@ -17,12 +18,24 @@ function formatDateLabel(dateString) {
   })
 }
 
+function normalizeDateKey(value) {
+  if (!value) return ''
+  if (typeof value === 'string') return value.slice(0, 10)
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function transformRows(rows) {
   const byDate = {}
   const dateSet = new Set()
 
   rows.forEach((row) => {
-    const dateKey = row.menu_date
+    const dateKey = normalizeDateKey(row.menu_date)
+    if (!dateKey) return
     dateSet.add(dateKey)
 
     if (!byDate[dateKey]) byDate[dateKey] = []
@@ -68,6 +81,17 @@ function getFallback(date) {
   return { messDateOptions, messMenuByDate }
 }
 
+export async function getMessDates() {
+  try {
+    const response = await fetch(MESS_DATES_API)
+    if (!response.ok) throw new Error(`Failed to fetch mess dates: ${response.status}`)
+    const rows = await response.json()
+    return rows.map(normalizeDateKey).filter(Boolean).sort()
+  } catch {
+    return messDateOptions.map((item) => item.id).sort()
+  }
+}
+
 export async function getMessMenu(date) {
   try {
     const url = date
@@ -83,6 +107,10 @@ export async function getMessMenu(date) {
   }
 }
 
+export async function getMessByDate(date) {
+  return getMessMenu(date)
+}
+
 export async function submitMessReview(payload) {
   const response = await fetch(`${MESS_API_BASE}/review`, {
     method: 'POST',
@@ -94,5 +122,42 @@ export async function submitMessReview(payload) {
     throw new Error(`Failed to submit review: ${response.status}`)
   }
 
+  return response.json()
+}
+
+export async function addMessMenu(data) {
+  const response = await fetch(MESS_API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}))
+    throw new Error(result?.message || `Failed to add menu: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function updateMessMenu(id, data) {
+  const response = await fetch(`${MESS_API_BASE}/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}))
+    throw new Error(result?.message || `Failed to update menu: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function deleteMessMenu(id, userId) {
+  const response = await fetch(`${MESS_API_BASE}/${id}?user_id=${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}))
+    throw new Error(result?.message || `Failed to delete menu: ${response.status}`)
+  }
   return response.json()
 }

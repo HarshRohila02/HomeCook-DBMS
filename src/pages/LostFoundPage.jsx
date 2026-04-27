@@ -5,10 +5,12 @@ import EmptyState from '../components/shared/EmptyState'
 import Modal from '../components/shared/Modal'
 import SearchBar from '../components/shared/SearchBar'
 import { getCurrentUser } from '../services/authService'
-import { createLostFoundItem, getLostFoundData } from '../services/lostFoundService'
+import { claimItem, createLostFoundItem, getLostFoundData } from '../services/lostFoundService'
 
 function LostFoundPage() {
-  const currentUserId = Number(getCurrentUser()?.id) || 1
+  const currentUser = getCurrentUser()
+  const currentUserId = Number(currentUser?.id) || 1
+  const isHost = currentUser?.role === 'host'
   const [activeTab, setActiveTab] = useState('Found')
   const [query, setQuery] = useState('')
   const [showAllFound, setShowAllFound] = useState(false)
@@ -25,6 +27,10 @@ function LostFoundPage() {
   const [status, setStatus] = useState('found')
   const [imageUrl, setImageUrl] = useState('')
   const [description, setDescription] = useState('')
+  const [isClaimModalOpen, setIsClaimModalOpen] = useState(false)
+  const [selectedFoundItem, setSelectedFoundItem] = useState(null)
+  const [claimMessage, setClaimMessage] = useState('')
+  const [actionMessage, setActionMessage] = useState('')
 
   useEffect(() => {
     async function loadLostFound() {
@@ -76,6 +82,35 @@ function LostFoundPage() {
 
   function closeModal() {
     setIsModalOpen(false)
+  }
+
+  function openClaimModal(item) {
+    setSelectedFoundItem(item)
+    setClaimMessage('')
+    setIsClaimModalOpen(true)
+  }
+
+  function closeClaimModal() {
+    setIsClaimModalOpen(false)
+    setSelectedFoundItem(null)
+  }
+
+  async function submitClaim(event) {
+    event.preventDefault()
+    if (!selectedFoundItem) return
+
+    try {
+      await claimItem(selectedFoundItem.id, {
+        user_id: currentUserId,
+        claim_message: claimMessage.trim(),
+      })
+      setActionMessage('Claim submitted successfully. Waiting for host approval.')
+      setErrorMessage('')
+      closeClaimModal()
+    } catch (error) {
+      setActionMessage('')
+      setErrorMessage(error?.message || 'Unable to submit claim right now.')
+    }
   }
 
   async function submitItem(event) {
@@ -159,6 +194,7 @@ function LostFoundPage() {
       />
 
       {errorMessage ? <p className="header-meta">{errorMessage}</p> : null}
+      {actionMessage ? <p className="header-meta">{actionMessage}</p> : null}
 
       {isLoading ? (
         <Card title="Lost & Found">Loading items...</Card>
@@ -183,7 +219,14 @@ function LostFoundPage() {
                       <p>{item.dateTime}</p>
                       <small>Token ID: {item.tokenId}</small>
                     </div>
-                    <span className="lost-status">{item.status}</span>
+                    <div className="lost-item-actions">
+                      <span className="lost-status">{item.status}</span>
+                      {!isHost ? (
+                        <Button variant="ghost" onClick={() => openClaimModal(item)}>
+                          Claim
+                        </Button>
+                      ) : null}
+                    </div>
                   </article>
                 ))}
                 {!visibleFoundItems.length ? (
@@ -306,6 +349,25 @@ function LostFoundPage() {
           />
           <div className="review-submit">
             <Button type="submit">Submit</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={isClaimModalOpen} title="Claim Found Item" onClose={closeClaimModal}>
+        <form className="review-form" onSubmit={submitClaim}>
+          <label htmlFor="claim-item-name">Item</label>
+          <input id="claim-item-name" value={selectedFoundItem?.itemName ?? ''} disabled />
+          <label htmlFor="claim-message">Claim message</label>
+          <textarea
+            id="claim-message"
+            rows="3"
+            value={claimMessage}
+            onChange={(event) => setClaimMessage(event.target.value)}
+            placeholder="Describe why this item belongs to you..."
+            required
+          />
+          <div className="review-submit">
+            <Button type="submit">Submit Claim</Button>
           </div>
         </form>
       </Modal>

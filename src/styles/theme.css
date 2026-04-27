@@ -27,6 +27,15 @@ a { color: inherit; text-decoration: none; }
 .header h1 { margin: 0; font-size: 20px; }
 .header-meta { font-size: 14px; color: var(--text-muted); }
 .header-user { display: inline-flex; align-items: center; gap: 10px; }
+.header-role-badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-dark);
+  background: var(--primary-soft);
+  border: 1px solid #d9e0ff;
+  border-radius: 999px;
+  padding: 4px 8px;
+}
 .mobile-menu-btn { display: none; border: 0; background: #eef1ff; color: var(--primary-dark); border-radius: 10px; width: 36px; height: 36px; font-size: 18px; cursor: pointer; }
 .sidebar-overlay { display: none; border: 0; padding: 0; margin: 0; position: fixed; inset: 0; background: rgba(20, 22, 33, 0.45); z-index: 40; }
 .page-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -113,6 +122,18 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(255, 255, 255, 0.16);
   padding: 10px 14px;
+}
+.campus-status-btn {
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.campus-status.status-in {
+  background: rgba(69, 196, 120, 0.25);
+}
+.campus-status.status-out {
+  background: rgba(235, 81, 81, 0.22);
 }
 
 .campus-status small {
@@ -920,6 +941,12 @@ a { color: inherit; text-decoration: none; }
   padding: 6px 10px;
 }
 
+.lost-item-actions {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
 .lost-new-desktop {
   justify-self: end;
 }
@@ -1350,6 +1377,59 @@ a { color: inherit; text-decoration: none; }
 .auth-link-text a {
   color: var(--primary-dark);
   font-weight: 600;
+}
+
+.host-dashboard-page {
+  gap: 14px;
+}
+
+.host-header {
+  background: linear-gradient(135deg, #6573eb 0%, #7a87f8 100%);
+  color: #fff;
+  border-radius: 24px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow-soft);
+}
+
+.host-header-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.host-back {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  display: grid;
+  place-items: center;
+}
+
+.host-header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 30px;
+}
+
+.host-header p {
+  margin: 8px 0 0;
+  opacity: 0.95;
+}
+
+.access-denied-page {
+  min-height: 300px;
+  place-content: center;
+}
+
+.access-denied-actions {
+  margin-top: 12px;
+}
+
+.host-claim-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: flex-start;
 }
 
 @media (max-width: 720px) {

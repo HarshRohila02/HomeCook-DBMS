@@ -1,4 +1,5 @@
 const { pool } = require("../db");
+const { resolveRoleFromRequest } = require("../middleware/roleMiddleware");
 
 async function getLostFoundItems(req, res) {
   const status = req.query.status;
@@ -63,6 +64,15 @@ async function createLostFoundItem(req, res) {
     return res.status(400).json({
       message: "created_by_user_id, item_name, location and valid status are required",
     });
+  }
+
+  if (status === "found") {
+    const role = await resolveRoleFromRequest(req);
+    if (role !== "host") {
+      return res.status(403).json({
+        message: "Only host can add found items",
+      });
+    }
   }
 
   try {
@@ -158,9 +168,200 @@ async function getLostFoundItemById(req, res) {
   }
 }
 
+async function claimLostFoundItem(req, res) {
+  const itemId = Number(req.params.id);
+  const { user_id, claim_message } = req.body;
+
+  if (!Number.isInteger(itemId) || itemId <= 0) {
+    return res.status(400).json({ message: "Invalid item id" });
+  }
+  if (!user_id || !claim_message?.trim()) {
+    return res.status(400).json({ message: "user_id and claim_message are required" });
+  }
+
+  try {
+    const [[item]] = await pool.query(
+      `
+      SELECT id, status
+      FROM lost_found_items
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [itemId],
+    );
+
+    if (!item) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    if (item.status !== "found") {
+      return res.status(409).json({ message: "Claims are only allowed for found items" });
+    }
+
+    const [[existingPendingClaim]] = await pool.query(
+      `
+      SELECT id
+      FROM lost_found_claims
+      WHERE item_id = ? AND user_id = ? AND claim_status = 'pending'
+      LIMIT 1
+      `,
+      [itemId, user_id],
+    );
+
+    if (existingPendingClaim) {
+      return res.status(409).json({ message: "Pending claim already exists for this item" });
+    }
+
+    const [result] = await pool.query(
+      `
+      INSERT INTO lost_found_claims (item_id, user_id, claim_message, claim_status)
+      VALUES (?, ?, ?, 'pending')
+      `,
+      [itemId, user_id, claim_message.trim()],
+    );
+
+    const [[created]] = await pool.query(
+      `
+      SELECT
+        c.id,
+        c.item_id,
+        c.user_id,
+        c.claim_message,
+        c.claim_status,
+        c.created_at
+      FROM lost_found_claims c
+      WHERE c.id = ?
+      LIMIT 1
+      `,
+      [result.insertId],
+    );
+
+    return res.status(201).json(created);
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to create claim",
+      error: error?.message ?? String(error),
+    });
+  }
+}
+
+async function getLostFoundClaims(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `
+      SELECT
+        c.id,
+        c.item_id,
+        c.user_id,
+        c.claim_message,
+        c.claim_status,
+        c.created_at,
+        i.item_name,
+        i.location,
+        i.token_code,
+        u.full_name AS student_name,
+        u.email AS student_email
+      FROM lost_found_claims c
+      INNER JOIN lost_found_items i ON i.id = c.item_id
+      INNER JOIN users u ON u.id = c.user_id
+      ORDER BY c.created_at DESC, c.id DESC
+      `,
+    );
+
+    return res.json(rows);
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch claims",
+      error: error?.message ?? String(error),
+    });
+  }
+}
+
+async function updateLostFoundClaimStatus(req, res) {
+  const claimId = Number(req.params.id);
+  const status = String(req.body?.status || "").toLowerCase();
+
+  if (!Number.isInteger(claimId) || claimId <= 0) {
+    return res.status(400).json({ message: "Invalid claim id" });
+  }
+  if (!["approved", "rejected"].includes(status)) {
+    return res.status(400).json({ message: "status must be approved or rejected" });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [[claim]] = await connection.query(
+      `
+      SELECT id, item_id, claim_status
+      FROM lost_found_claims
+      WHERE id = ?
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [claimId],
+    );
+
+    if (!claim) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Claim not found" });
+    }
+
+    await connection.query(
+      `
+      UPDATE lost_found_claims
+      SET claim_status = ?
+      WHERE id = ?
+      `,
+      [status, claimId],
+    );
+
+    if (status === "approved") {
+      await connection.query(
+        `
+        UPDATE lost_found_items
+        SET status = 'claimed'
+        WHERE id = ?
+        `,
+        [claim.item_id],
+      );
+    }
+
+    const [[updatedClaim]] = await connection.query(
+      `
+      SELECT
+        c.id,
+        c.item_id,
+        c.user_id,
+        c.claim_message,
+        c.claim_status,
+        c.created_at
+      FROM lost_found_claims c
+      WHERE c.id = ?
+      LIMIT 1
+      `,
+      [claimId],
+    );
+
+    await connection.commit();
+    return res.json(updatedClaim);
+  } catch (error) {
+    await connection.rollback();
+    return res.status(500).json({
+      message: "Failed to update claim status",
+      error: error?.message ?? String(error),
+    });
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   getLostFoundItems,
   createLostFoundItem,
   getLostFoundItemById,
+  claimLostFoundItem,
+  getLostFoundClaims,
+  updateLostFoundClaimStatus,
 };
 

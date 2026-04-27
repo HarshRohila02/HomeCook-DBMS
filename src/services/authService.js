@@ -11,6 +11,7 @@ function buildFallbackUser() {
     email: profileSummary.email,
     university: profileSummary.university,
     profile_image: null,
+    role: 'student',
   }
 }
 
@@ -85,6 +86,7 @@ export async function register(userData) {
       email: userData.email,
       university: userData.university,
       profile_image: null,
+      role: 'student',
     }
     saveCurrentUser(fallbackUser)
     return fallbackUser

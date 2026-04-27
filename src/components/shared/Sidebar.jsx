@@ -1,4 +1,5 @@
 ﻿import { NavLink } from 'react-router-dom'
+import { getCurrentUser } from '../../services/authService'
 
 const navLinks = [
   ['/', 'Dashboard'],
@@ -12,6 +13,17 @@ const navLinks = [
 ]
 
 function Sidebar({ isOpen, onClose }) {
+  const currentUser = getCurrentUser()
+  const isHost = currentUser?.role === 'host'
+  const roleAwareLinks = isHost
+    ? [
+        ...navLinks,
+        ['/host', 'Host Dashboard'],
+        ['/host/mess-management', 'Host Mess'],
+        ['/host/lost-found-claims', 'Host Claims'],
+      ]
+    : navLinks
+
   return (
     <>
       <button
@@ -23,7 +35,7 @@ function Sidebar({ isOpen, onClose }) {
       <aside className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-brand">Unisphere</div>
         <nav>
-          {navLinks.map(([path, label]) => (
+          {roleAwareLinks.map(([path, label]) => (
             <NavLink
               key={path}
               to={path}

@@ -31,6 +31,7 @@ async function login(req, res) {
         email,
         university,
         avatar_url AS profile_image,
+        role,
         password
       FROM users
       WHERE email = ?
@@ -80,8 +81,8 @@ async function register(req, res) {
 
     const [result] = await pool.query(
       `
-      INSERT INTO users (full_name, phone, email, university, password, avatar_url)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO users (full_name, phone, email, university, password, avatar_url, role)
+      VALUES (?, ?, ?, ?, ?, ?, 'student')
       `,
       [
         full_name.trim(),
@@ -101,7 +102,8 @@ async function register(req, res) {
         phone,
         email,
         university,
-        avatar_url AS profile_image
+        avatar_url AS profile_image,
+        role
       FROM users
       WHERE id = ?
       LIMIT 1

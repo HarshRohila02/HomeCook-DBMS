@@ -114,7 +114,47 @@ async function createCampusLog(req, res) {
   }
 }
 
+async function getLatestCampusStatus(req, res) {
+  const userId = Number(req.params.user_id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ message: "Invalid user_id" });
+  }
+
+  try {
+    const [[row]] = await pool.query(
+      `
+      SELECT
+        status,
+        log_time
+      FROM campus_logs
+      WHERE user_id = ?
+      ORDER BY log_time DESC, id DESC
+      LIMIT 1
+      `,
+      [userId],
+    );
+
+    if (!row) {
+      return res.json({
+        status: "IN",
+        timestamp: null,
+      });
+    }
+
+    return res.json({
+      status: row.status,
+      timestamp: row.log_time,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch latest campus status",
+      error: error?.message ?? String(error),
+    });
+  }
+}
+
 module.exports = {
   getCampusLogs,
   createCampusLog,
+  getLatestCampusStatus,
 };

@@ -3,8 +3,54 @@ import Button from '../components/shared/Button'
 import Card from '../components/shared/Card'
 import Modal from '../components/shared/Modal'
 import EmptyState from '../components/shared/EmptyState'
-import { getMessMenu, submitMessReview } from '../services/messService'
+import { getMessByDate, getMessDates, getMessMenu, submitMessReview } from '../services/messService'
 import { getCurrentUser } from '../services/authService'
+
+function toDateKey(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatLabel(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00`)
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+function buildDateTabs(dbDates) {
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(today.getDate() + 1)
+
+  const baseDates = [toDateKey(yesterday), toDateKey(today), toDateKey(tomorrow)]
+  const futureDates = dbDates.filter((dateKey) => dateKey > toDateKey(tomorrow))
+  const uniqueDates = Array.from(new Set([...baseDates, ...futureDates])).sort()
+
+  return uniqueDates.map((dateKey) => ({
+    id: dateKey,
+    label: formatLabel(dateKey),
+  }))
+}
+
+function pickDefaultDate(availableDates) {
+  if (!availableDates.length) return ''
+  const todayKey = toDateKey(new Date())
+  if (availableDates.includes(todayKey)) return todayKey
+
+  const todayMs = new Date(`${todayKey}T00:00:00`).getTime()
+  return [...availableDates].sort((a, b) => {
+    const aDiff = Math.abs(new Date(`${a}T00:00:00`).getTime() - todayMs)
+    const bDiff = Math.abs(new Date(`${b}T00:00:00`).getTime() - todayMs)
+    return aDiff - bDiff
+  })[0]
+}
 
 function MessMenuPage() {
   const currentUserId = Number(getCurrentUser()?.id) || 1
@@ -22,12 +68,12 @@ function MessMenuPage() {
       setIsLoading(true)
       setErrorMessage('')
       try {
-        const data = await getMessMenu()
-        setDateOptions(data.messDateOptions)
+        const [dates, data] = await Promise.all([getMessDates(), getMessMenu()])
+        const tabs = buildDateTabs(dates)
+        setDateOptions(tabs)
         setMenuByDate(data.messMenuByDate)
-        if (data.messDateOptions.length > 0) {
-          setActiveDate(data.messDateOptions[1]?.id ?? data.messDateOptions[0].id)
-        }
+        const defaultDate = pickDefaultDate(dates)
+        setActiveDate(defaultDate || tabs[1]?.id || tabs[0]?.id || '')
       } catch {
         setErrorMessage('Unable to load mess menu right now.')
       } finally {
@@ -51,18 +97,11 @@ function MessMenuPage() {
 
   async function loadDateMenu(dateId) {
     try {
-      const data = await getMessMenu(dateId)
+      const data = await getMessByDate(dateId)
       setMenuByDate((prev) => ({
         ...prev,
         [dateId]: data.messMenuByDate[dateId] ?? [],
       }))
-      if (data.messDateOptions.length) {
-        setDateOptions((prev) => {
-          const map = new Map(prev.map((item) => [item.id, item]))
-          data.messDateOptions.forEach((item) => map.set(item.id, item))
-          return Array.from(map.values()).sort((a, b) => a.id.localeCompare(b.id))
-        })
-      }
     } catch {
       // fallback is handled in service; keep silent here
     }

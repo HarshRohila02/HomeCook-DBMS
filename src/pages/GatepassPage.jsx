@@ -5,10 +5,16 @@ import EmptyState from '../components/shared/EmptyState'
 import Modal from '../components/shared/Modal'
 import SearchBar from '../components/shared/SearchBar'
 import { getCurrentUser } from '../services/authService'
-import { createGatepass, getGatepasses } from '../services/gatepassService'
+import {
+  createGatepass,
+  getGatepasses,
+  updateGatepassStatus,
+} from '../services/gatepassService'
 
 function GatepassPage() {
-  const currentUserId = Number(getCurrentUser()?.id) || 1
+  const currentUser = getCurrentUser()
+  const currentUserId = Number(currentUser?.id) || 1
+  const isHost = currentUser?.role === 'host'
   const [query, setQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [gatepasses, setGatepasses] = useState([])
@@ -38,10 +44,14 @@ function GatepassPage() {
   }, [])
 
   const records = useMemo(() => {
-    return gatepasses.filter((row) =>
-      `${row.id} ${row.destination} ${row.reason} ${row.status}`.toLowerCase().includes(query.toLowerCase()),
-    )
-  }, [gatepasses, query])
+    return gatepasses
+      .filter((row) => (isHost ? true : row.userId === currentUserId))
+      .filter((row) =>
+        `${row.id} ${row.destination} ${row.reason} ${row.status}`
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+      )
+  }, [gatepasses, isHost, currentUserId, query])
 
   function openRequestModal() {
     setReason('')
@@ -88,6 +98,18 @@ function GatepassPage() {
     closeRequestModal()
   }
 
+  async function handleStatusUpdate(gatepassId, status) {
+    try {
+      const updated = await updateGatepassStatus(gatepassId, status, currentUserId)
+      setGatepasses((prev) =>
+        prev.map((item) => (item.gatepassId === gatepassId ? updated : item)),
+      )
+      setErrorMessage('')
+    } catch (error) {
+      setErrorMessage(error?.message || 'Unable to update gatepass status.')
+    }
+  }
+
   return (
     <div className="page-content gatepass-page">
       <section className="gatepass-header">
@@ -113,7 +135,9 @@ function GatepassPage() {
       ) : (
         <Card
           title="Gatepass Requests"
-          action={<Button onClick={openRequestModal}>Request Gatepass</Button>}
+          action={
+            isHost ? null : <Button onClick={openRequestModal}>Request Gatepass</Button>
+          }
         >
           {records.length ? (
             <div className="item-list">
@@ -128,6 +152,25 @@ function GatepassPage() {
                     </small>
                   </div>
                   <span className="gatepass-status">{item.status}</span>
+                  {isHost ? (
+                    <div className="host-claim-actions">
+                      <Button onClick={() => handleStatusUpdate(item.gatepassId, 'approved')}>
+                        Approve
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => handleStatusUpdate(item.gatepassId, 'rejected')}
+                      >
+                        Reject
+                      </Button>
+                      <Button onClick={() => handleStatusUpdate(item.gatepassId, 'security_out')}>
+                        Mark OUT
+                      </Button>
+                      <Button onClick={() => handleStatusUpdate(item.gatepassId, 'security_in')}>
+                        Mark IN
+                      </Button>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>

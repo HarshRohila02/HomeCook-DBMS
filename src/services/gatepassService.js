@@ -1,6 +1,7 @@
 ﻿import { gatepassRequests } from '../data/gatepassData'
 
 const GATEPASS_API_BASE = 'http://localhost:5000/api/gatepasses'
+const CAMPUS_STATUS_API_BASE = 'http://localhost:5000/api/campus-logs/latest'
 
 function formatDate(dateValue) {
   if (!dateValue) return ''
@@ -25,13 +26,18 @@ function formatStatus(statusValue) {
   if (!statusValue) return 'pending'
   const normalized = String(statusValue).trim().toLowerCase()
   if (!normalized) return 'pending'
-  if (normalized === 'requested') return 'Pending'
+  if (normalized === 'pending') return 'Pending'
+  if (normalized === 'approved') return 'Approved'
+  if (normalized === 'rejected') return 'Rejected'
+  if (normalized === 'security_out') return 'Security Out'
+  if (normalized === 'security_in') return 'Security In'
   return normalized[0].toUpperCase() + normalized.slice(1)
 }
 
 function mapGatepass(row) {
   return {
     id: row.gatepass_code ?? `GP-${row.id}`,
+    userId: Number(row.user_id ?? 0),
     reason: row.reason ?? '',
     destination: row.destination ?? '',
     date: formatDate(row.date),
@@ -81,4 +87,28 @@ export async function createGatepass(data) {
   }
   const row = await response.json()
   return mapGatepass(row)
+}
+
+export async function updateGatepassStatus(id, status, userId) {
+  const response = await fetch(`${GATEPASS_API_BASE}/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, user_id: userId }),
+  })
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}))
+    throw new Error(result?.message || `Failed to update gatepass status: ${response.status}`)
+  }
+  const row = await response.json()
+  return mapGatepass(row)
+}
+
+export async function getLatestCampusStatus(userId) {
+  try {
+    const response = await fetch(`${CAMPUS_STATUS_API_BASE}/${userId}`)
+    if (!response.ok) throw new Error(`Failed to fetch campus status: ${response.status}`)
+    return response.json()
+  } catch {
+    return { status: 'IN', timestamp: null }
+  }
 }

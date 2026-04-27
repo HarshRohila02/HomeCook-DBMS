@@ -1,6 +1,7 @@
 ﻿import { claimedItems, foundItems, lostItems } from '../data/lostFoundData'
 
 const LOST_FOUND_API_BASE = 'http://localhost:5000/api/lost-found/items'
+const LOST_FOUND_CLAIMS_API = 'http://localhost:5000/api/lost-found/claims'
 
 function formatDateTime(dateValue) {
   if (!dateValue) return ''
@@ -79,4 +80,45 @@ export async function getLostFoundData() {
     lostItems: backendLost,
     claimedItems: backendClaimed,
   }
+}
+
+export async function claimItem(itemId, data) {
+  const response = await fetch(`${LOST_FOUND_API_BASE}/${itemId}/claim`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}))
+    throw new Error(result?.message || `Failed to submit claim: ${response.status}`)
+  }
+
+  return response.json()
+}
+
+export async function getClaims(userId) {
+  try {
+    const url = `${LOST_FOUND_CLAIMS_API}?user_id=${encodeURIComponent(userId)}`
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Failed to fetch claims: ${response.status}`)
+    return response.json()
+  } catch {
+    return []
+  }
+}
+
+export async function updateClaimStatus(claimId, status, userId) {
+  const response = await fetch(`${LOST_FOUND_CLAIMS_API}/${claimId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, user_id: userId }),
+  })
+
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}))
+    throw new Error(result?.message || `Failed to update claim: ${response.status}`)
+  }
+
+  return response.json()
 }
