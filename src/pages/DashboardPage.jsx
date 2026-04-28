@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Card from '../components/shared/Card'
 import { getCurrentUser } from '../services/authService'
@@ -14,7 +14,6 @@ function DashboardPage() {
     quickModules: [],
     messTabs: [],
     todaysMenu: {},
-    dashboardHighlights: [],
   })
   const [activeMealTab, setActiveMealTab] = useState('')
   const [campusStatus, setCampusStatus] = useState('IN')
@@ -105,17 +104,6 @@ function DashboardPage() {
         <div className="mess-items">
           {activeMenuItems.map((item) => (
             <span key={item}>{item}</span>
-          ))}
-        </div>
-      </Card>
-
-      <Card title="Highlights">
-        <div className="item-list">
-          {dashboardData.dashboardHighlights.map((item) => (
-            <div key={item.title} className="item-row">
-              <span>{item.title}</span>
-              <strong>{item.value}</strong>
-            </div>
           ))}
         </div>
       </Card>

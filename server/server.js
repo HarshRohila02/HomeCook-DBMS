@@ -11,6 +11,7 @@ const gatepassRoutes = require("./routes/gatepassRoutes");
 const shuttleRoutes = require("./routes/shuttleRoutes");
 const campusLogsRoutes = require("./routes/campusLogsRoutes");
 const authRoutes = require("./routes/authRoutes");
+const analyticsRoutes = require("./routes/analyticsRoutes");
 
 const app = express();
 
@@ -26,16 +27,25 @@ app.use("/api/gatepasses", gatepassRoutes);
 app.use("/api/shuttles", shuttleRoutes);
 app.use("/api/campus-logs", campusLogsRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && "body" in err) {
     return res.status(400).json({ message: "Invalid JSON body" });
   }
-  return next(err);
+  return res.status(500).json({ message: "Internal server error" });
 });
 
 app.use((req, res) => {
   return res.status(404).json({ message: "API route not found" });
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err.message);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
 });
 
 const PORT = process.env.PORT || 5000;

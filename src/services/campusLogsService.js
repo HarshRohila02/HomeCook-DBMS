@@ -1,4 +1,4 @@
-﻿import { campusLogs } from '../data/campusLogsData'
+import { campusLogs } from '../data/campusLogsData'
 
 const CAMPUS_LOGS_API_BASE = 'http://localhost:5000/api/campus-logs'
 
@@ -33,9 +33,12 @@ function getFallbackLogs(status) {
   return campusLogs.filter((log) => log.action === status)
 }
 
-export async function getCampusLogs(status) {
+export async function getCampusLogs(userId, status) {
   try {
-    const url = status ? `${CAMPUS_LOGS_API_BASE}?status=${encodeURIComponent(status)}` : CAMPUS_LOGS_API_BASE
+    const params = new URLSearchParams()
+    if (userId) params.set('user_id', userId)
+    if (status) params.set('status', status)
+    const url = `${CAMPUS_LOGS_API_BASE}?${params.toString()}`
     const response = await fetch(url)
     if (!response.ok) throw new Error(`Failed to fetch campus logs: ${response.status}`)
     const rows = await response.json()

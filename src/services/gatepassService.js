@@ -1,4 +1,4 @@
-﻿import { gatepassRequests } from '../data/gatepassData'
+import { gatepassRequests } from '../data/gatepassData'
 
 const GATEPASS_API_BASE = 'http://localhost:5000/api/gatepasses'
 const CAMPUS_STATUS_API_BASE = 'http://localhost:5000/api/campus-logs/latest'
@@ -48,9 +48,13 @@ function mapGatepass(row) {
   }
 }
 
-export async function getGatepasses() {
+export async function getGatepasses(userId, search) {
   try {
-    const response = await fetch(GATEPASS_API_BASE)
+    const params = new URLSearchParams()
+    if (userId) params.set('user_id', userId)
+    if (search && search.trim()) params.set('search', search.trim())
+    const url = `${GATEPASS_API_BASE}?${params.toString()}`
+    const response = await fetch(url)
     if (!response.ok) throw new Error(`Failed to fetch gatepasses: ${response.status}`)
     const rows = await response.json()
     return rows.map(mapGatepass)
@@ -58,6 +62,7 @@ export async function getGatepasses() {
     return gatepassRequests
   }
 }
+
 
 export async function getGatepassById(id) {
   try {

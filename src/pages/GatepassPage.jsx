@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Button from '../components/shared/Button'
 import Card from '../components/shared/Card'
 import EmptyState from '../components/shared/EmptyState'
@@ -27,31 +27,32 @@ function GatepassPage() {
   const [timeOut, setTimeOut] = useState('')
   const [expectedReturn, setExpectedReturn] = useState('')
 
-  useEffect(() => {
-    async function loadGatepasses() {
-      setIsLoading(true)
-      setErrorMessage('')
-      try {
-        const data = await getGatepasses()
-        setGatepasses(data)
-      } catch {
-        setErrorMessage('Unable to load gatepasses right now.')
-      } finally {
-        setIsLoading(false)
-      }
+  async function loadGatepasses(searchTerm) {
+    setIsLoading(true)
+    setErrorMessage('')
+    try {
+      const userFilter = isHost ? undefined : currentUserId
+      const data = await getGatepasses(userFilter, searchTerm || undefined)
+      setGatepasses(data)
+    } catch {
+      setErrorMessage('Unable to load gatepasses right now.')
+    } finally {
+      setIsLoading(false)
     }
-    loadGatepasses()
+  }
+
+  useEffect(() => {
+    loadGatepasses(query)
   }, [])
 
-  const records = useMemo(() => {
-    return gatepasses
-      .filter((row) => (isHost ? true : row.userId === currentUserId))
-      .filter((row) =>
-        `${row.id} ${row.destination} ${row.reason} ${row.status}`
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-      )
-  }, [gatepasses, isHost, currentUserId, query])
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadGatepasses(query)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const records = gatepasses
 
   function openRequestModal() {
     setReason('')
@@ -151,24 +152,35 @@ function GatepassPage() {
                       {item.date} • Out: {item.timeOut} • Return: {item.expectedReturn}
                     </small>
                   </div>
-                  <span className="gatepass-status">{item.status}</span>
+                  <span className={`gatepass-status gatepass-status-${item.status?.toLowerCase().replace(/\s+/g, '-')}`}>{item.status}</span>
                   {isHost ? (
                     <div className="host-claim-actions">
-                      <Button onClick={() => handleStatusUpdate(item.gatepassId, 'approved')}>
-                        Approve
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleStatusUpdate(item.gatepassId, 'rejected')}
-                      >
-                        Reject
-                      </Button>
-                      <Button onClick={() => handleStatusUpdate(item.gatepassId, 'security_out')}>
-                        Mark OUT
-                      </Button>
-                      <Button onClick={() => handleStatusUpdate(item.gatepassId, 'security_in')}>
-                        Mark IN
-                      </Button>
+                      {item.status === 'Pending' && (
+                        <>
+                          <Button onClick={() => handleStatusUpdate(item.gatepassId, 'approved')}>
+                            Approve
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={() => {
+                              if (window.confirm('Reject this gatepass request?'))
+                                handleStatusUpdate(item.gatepassId, 'rejected')
+                            }}
+                          >
+                            Reject
+                          </Button>
+                        </>
+                      )}
+                      {item.status === 'Approved' && (
+                        <Button onClick={() => handleStatusUpdate(item.gatepassId, 'security_out')}>
+                          Mark OUT
+                        </Button>
+                      )}
+                      {item.status === 'Security Out' && (
+                        <Button onClick={() => handleStatusUpdate(item.gatepassId, 'security_in')}>
+                          Mark IN
+                        </Button>
+                      )}
                     </div>
                   ) : null}
                 </article>

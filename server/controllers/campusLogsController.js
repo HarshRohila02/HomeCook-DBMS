@@ -12,10 +12,15 @@ function toInitials(fullName) {
 
 async function getCampusLogs(req, res) {
   const statusFilter = req.query.status;
+  const userId = Number(req.query.user_id);
   const allowedStatuses = new Set(["IN", "OUT"]);
 
   if (statusFilter && !allowedStatuses.has(statusFilter)) {
     return res.status(400).json({ message: "status must be IN or OUT" });
+  }
+
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ message: "user_id is required" });
   }
 
   try {
@@ -29,11 +34,12 @@ async function getCampusLogs(req, res) {
         u.avatar_url
       FROM campus_logs l
       INNER JOIN users u ON u.id = l.user_id
+      WHERE l.user_id = ?
     `;
-    const params = [];
+    const params = [userId];
 
     if (statusFilter) {
-      query += " WHERE l.status = ?";
+      query += " AND l.status = ?";
       params.push(statusFilter);
     }
 
@@ -59,6 +65,7 @@ async function getCampusLogs(req, res) {
     });
   }
 }
+
 
 async function createCampusLog(req, res) {
   const { user_id, status, log_time } = req.body;

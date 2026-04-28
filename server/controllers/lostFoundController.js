@@ -3,6 +3,8 @@ const { resolveRoleFromRequest } = require("../middleware/roleMiddleware");
 
 async function getLostFoundItems(req, res) {
   const status = req.query.status;
+  const search = req.query.search;
+  const limit = Number(req.query.limit);
   const allowedStatuses = new Set(["found", "lost", "claimed"]);
 
   if (status && !allowedStatuses.has(status)) {
@@ -23,14 +25,32 @@ async function getLostFoundItems(req, res) {
         reported_at
       FROM lost_found_items
     `;
+    const conditions = [];
     const params = [];
 
     if (status) {
-      query += " WHERE status = ?";
+      conditions.push("status = ?");
       params.push(status);
     }
 
+    if (search && search.trim()) {
+      conditions.push(
+        "(item_name LIKE ? OR location LIKE ? OR token_code LIKE ? OR description LIKE ?)"
+      );
+      const pattern = `%${search.trim()}%`;
+      params.push(pattern, pattern, pattern, pattern);
+    }
+
+    if (conditions.length) {
+      query += " WHERE " + conditions.join(" AND ");
+    }
+
     query += " ORDER BY reported_at DESC, id DESC";
+
+    if (Number.isInteger(limit) && limit > 0) {
+      query += " LIMIT ?";
+      params.push(limit);
+    }
 
     const [rows] = await pool.query(query, params);
     return res.json(rows);
@@ -41,6 +61,7 @@ async function getLostFoundItems(req, res) {
     });
   }
 }
+
 
 async function createLostFoundItem(req, res) {
   const {

@@ -28,6 +28,7 @@ function HostLostFoundClaimsPage() {
   }, [])
 
   async function handleStatusUpdate(claimId, status) {
+    if (status === 'rejected' && !window.confirm('Are you sure you want to reject this claim?')) return
     try {
       const updated = await updateClaimStatus(claimId, status, currentUserId)
       setClaims((prev) =>
@@ -35,6 +36,7 @@ function HostLostFoundClaimsPage() {
           claim.id === claimId ? { ...claim, claim_status: updated.claim_status } : claim,
         ),
       )
+      setErrorMessage('')
     } catch (error) {
       setErrorMessage(error?.message || 'Failed to update claim status.')
     }

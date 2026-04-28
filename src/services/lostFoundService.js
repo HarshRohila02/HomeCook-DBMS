@@ -1,4 +1,4 @@
-﻿import { claimedItems, foundItems, lostItems } from '../data/lostFoundData'
+import { claimedItems, foundItems, lostItems } from '../data/lostFoundData'
 
 const LOST_FOUND_API_BASE = 'http://localhost:5000/api/lost-found/items'
 const LOST_FOUND_CLAIMS_API = 'http://localhost:5000/api/lost-found/claims'
@@ -39,11 +39,12 @@ function fallbackData(status) {
   return [...foundItems, ...lostItems, ...claimedItems]
 }
 
-export async function getLostFoundItems(status) {
+export async function getLostFoundItems(status, search) {
   try {
-    const url = status
-      ? `${LOST_FOUND_API_BASE}?status=${encodeURIComponent(status)}`
-      : LOST_FOUND_API_BASE
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (search && search.trim()) params.set('search', search.trim())
+    const url = `${LOST_FOUND_API_BASE}?${params.toString()}`
     const response = await fetch(url)
     if (!response.ok) throw new Error(`Failed to fetch items: ${response.status}`)
     const rows = await response.json()
@@ -68,11 +69,11 @@ export async function createLostFoundItem(payload) {
   return mapItem(row)
 }
 
-export async function getLostFoundData() {
+export async function getLostFoundData(search) {
   const [backendFound, backendLost, backendClaimed] = await Promise.all([
-    getLostFoundItems('found'),
-    getLostFoundItems('lost'),
-    getLostFoundItems('claimed'),
+    getLostFoundItems('found', search),
+    getLostFoundItems('lost', search),
+    getLostFoundItems('claimed', search),
   ])
 
   return {
@@ -81,6 +82,7 @@ export async function getLostFoundData() {
     claimedItems: backendClaimed,
   }
 }
+
 
 export async function claimItem(itemId, data) {
   const response = await fetch(`${LOST_FOUND_API_BASE}/${itemId}/claim`, {

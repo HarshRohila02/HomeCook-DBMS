@@ -107,9 +107,11 @@ function HostMessManagementPage() {
   }
 
   async function onDelete(menuId) {
+    if (!window.confirm('Are you sure you want to delete this menu item?')) return
     try {
       await deleteMessMenu(menuId, currentUserId)
       setMenus((prev) => prev.filter((item) => item.id !== menuId))
+      setErrorMessage('')
     } catch (error) {
       setErrorMessage(error?.message || 'Unable to delete menu item.')
     }
@@ -230,6 +232,9 @@ function HostMessManagementPage() {
               />
               <div className="review-submit">
                 <Button type="submit">{editingId ? 'Update' : 'Add'} Menu</Button>
+                {editingId && (
+                  <Button variant="ghost" onClick={() => resetForm(activeDate)}>Cancel</Button>
+                )}
               </div>
             </form>
           </Card>

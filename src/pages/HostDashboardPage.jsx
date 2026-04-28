@@ -14,9 +14,14 @@ const hostCards = [
     description: 'Review and approve item claims.',
     route: '/host/lost-found-claims',
   },
-  { id: 'gatepass', title: 'Gatepass Approvals', description: 'Approve or reject pending gatepass requests.' },
-  { id: 'shuttle', title: 'Shuttle Management', description: 'Manage shuttle schedules and seat availability.' },
-  { id: 'campus-logs', title: 'Campus Logs Management', description: 'Update and monitor campus IN/OUT logs.' },
+  { id: 'gatepass', title: 'Gatepass Approvals', description: 'Approve or reject pending gatepass requests.', route: '/gatepass' },
+  {
+    id: 'shuttle',
+    title: 'Shuttle Management',
+    description: 'Manage shuttle schedules and seat availability.',
+    route: '/host/shuttle-management',
+  },
+  { id: 'campus-logs', title: 'Campus Logs', description: 'View and monitor campus IN/OUT logs.', route: '/campus-logs' },
 ]
 
 function HostDashboardPage() {

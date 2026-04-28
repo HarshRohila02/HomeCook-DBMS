@@ -1,4 +1,4 @@
-﻿import { NavLink } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { getCurrentUser } from '../../services/authService'
 
 const navLinks = [
@@ -21,6 +21,7 @@ function Sidebar({ isOpen, onClose }) {
         ['/host', 'Host Dashboard'],
         ['/host/mess-management', 'Host Mess'],
         ['/host/lost-found-claims', 'Host Claims'],
+        ['/host/shuttle-management', 'Shuttle Mgmt'],
       ]
     : navLinks
 

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Button from '../components/shared/Button'
 import Card from '../components/shared/Card'
 import EmptyState from '../components/shared/EmptyState'
@@ -24,7 +24,7 @@ function LostFoundPage() {
 
   const [itemName, setItemName] = useState('')
   const [location, setLocation] = useState('')
-  const [status, setStatus] = useState('found')
+  const [status, setStatus] = useState(isHost ? 'found' : 'lost')
   const [imageUrl, setImageUrl] = useState('')
   const [description, setDescription] = useState('')
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false)
@@ -32,49 +32,41 @@ function LostFoundPage() {
   const [claimMessage, setClaimMessage] = useState('')
   const [actionMessage, setActionMessage] = useState('')
 
-  useEffect(() => {
-    async function loadLostFound() {
-      setIsLoading(true)
-      setErrorMessage('')
-      try {
-        const data = await getLostFoundData()
-        setFoundItems(data.foundItems)
-        setLostItems(data.lostItems)
-        setClaimedItems(data.claimedItems)
-      } catch {
-        setErrorMessage('Unable to load lost and found items right now.')
-      } finally {
-        setIsLoading(false)
-      }
+  async function loadLostFound(searchTerm) {
+    setIsLoading(true)
+    setErrorMessage('')
+    try {
+      const data = await getLostFoundData(searchTerm || undefined)
+      setFoundItems(data.foundItems)
+      setLostItems(data.lostItems)
+      setClaimedItems(data.claimedItems)
+    } catch {
+      setErrorMessage('Unable to load lost and found items right now.')
+    } finally {
+      setIsLoading(false)
     }
-    loadLostFound()
+  }
+
+  useEffect(() => {
+    loadLostFound(query)
   }, [])
 
-  const filteredFoundItems = useMemo(() => {
-    return foundItems.filter((item) => {
-      const searchText = `${item.itemName} ${item.location} ${item.status} ${item.tokenId}`.toLowerCase()
-      return searchText.includes(query.toLowerCase())
-    })
-  }, [foundItems, query])
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadLostFound(query)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
 
-  const filteredLostItems = useMemo(() => {
-    return lostItems.filter((item) => {
-      const searchText = `${item.itemName} ${item.location} ${item.status} ${item.tokenId}`.toLowerCase()
-      return searchText.includes(query.toLowerCase())
-    })
-  }, [lostItems, query])
+  const filteredFoundItems = foundItems
+  const filteredLostItems = lostItems
+  const filteredClaimedItems = claimedItems
 
-  const filteredClaimedItems = useMemo(() => {
-    return claimedItems.filter((item) => {
-      const searchText = `${item.itemName} ${item.location} ${item.status} ${item.tokenId}`.toLowerCase()
-      return searchText.includes(query.toLowerCase())
-    })
-  }, [claimedItems, query])
 
   function openModal() {
     setItemName('')
     setLocation('')
-    setStatus('found')
+    setStatus(isHost ? 'found' : 'lost')
     setImageUrl('')
     setDescription('')
     setIsModalOpen(true)
@@ -327,9 +319,11 @@ function LostFoundPage() {
             value={status}
             onChange={(event) => setStatus(event.target.value)}
           >
-            <option value="found">found</option>
-            <option value="lost">lost</option>
-            <option value="claimed">claimed</option>
+            {isHost ? (
+              <option value="found">found</option>
+            ) : (
+              <option value="lost">lost</option>
+            )}
           </select>
           <label htmlFor="lost-image-url">Image URL</label>
           <input

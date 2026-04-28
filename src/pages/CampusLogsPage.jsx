@@ -1,9 +1,12 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Card from '../components/shared/Card'
 import EmptyState from '../components/shared/EmptyState'
+import { getCurrentUser } from '../services/authService'
 import { getCampusLogs } from '../services/campusLogsService'
 
 function CampusLogsPage() {
+  const currentUser = getCurrentUser()
+  const currentUserId = Number(currentUser?.id) || 1
   const [logs, setLogs] = useState([])
   const [filter, setFilter] = useState('All')
   const [isLoading, setIsLoading] = useState(true)
@@ -13,7 +16,7 @@ function CampusLogsPage() {
     setIsLoading(true)
     setErrorMessage('')
     try {
-      const data = await getCampusLogs(statusFilter)
+      const data = await getCampusLogs(currentUserId, statusFilter)
       setLogs(data)
     } catch {
       setErrorMessage('Unable to load campus logs right now.')
@@ -26,6 +29,7 @@ function CampusLogsPage() {
     const statusFilter = filter === 'All' ? undefined : filter
     loadLogs(statusFilter)
   }, [filter])
+
 
   const filteredLogs = useMemo(() => {
     const sortedLogs = [...logs].sort((a, b) => {

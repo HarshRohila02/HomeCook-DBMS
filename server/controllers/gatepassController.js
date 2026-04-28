@@ -1,9 +1,12 @@
 const { pool } = require("../db");
 
 async function getGatepasses(req, res) {
+  const userId = Number(req.query.user_id);
+  const search = req.query.search;
+  const statusFilter = req.query.status;
+
   try {
-    const [rows] = await pool.query(
-      `
+    let query = `
       SELECT
         id,
         user_id,
@@ -15,9 +18,35 @@ async function getGatepasses(req, res) {
         expected_return_time,
         status
       FROM gatepasses
-      ORDER BY created_at DESC, id DESC
-      `,
-    );
+    `;
+    const conditions = [];
+    const params = [];
+
+    if (Number.isInteger(userId) && userId > 0) {
+      conditions.push("user_id = ?");
+      params.push(userId);
+    }
+
+    if (statusFilter && statusFilter.trim()) {
+      conditions.push("status = ?");
+      params.push(statusFilter.trim().toLowerCase());
+    }
+
+    if (search && search.trim()) {
+      conditions.push(
+        "(gatepass_code LIKE ? OR reason LIKE ? OR destination LIKE ?)"
+      );
+      const pattern = `%${search.trim()}%`;
+      params.push(pattern, pattern, pattern);
+    }
+
+    if (conditions.length) {
+      query += " WHERE " + conditions.join(" AND ");
+    }
+
+    query += " ORDER BY created_at DESC, id DESC";
+
+    const [rows] = await pool.query(query, params);
 
     return res.json(rows);
   } catch (error) {
@@ -27,6 +56,7 @@ async function getGatepasses(req, res) {
     });
   }
 }
+
 
 async function getGatepassById(req, res) {
   const gatepassId = Number(req.params.id);

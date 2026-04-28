@@ -1,6 +1,8 @@
 import { profileActions, profileSummary } from '../data/profileData'
 import { getCurrentUser } from './authService'
 
+const USERS_API_BASE = 'http://localhost:5000/api/users'
+
 function toInitials(name) {
   if (!name) return profileSummary.avatarPlaceholder
   return name
@@ -19,6 +21,7 @@ function buildProfileSummary(userData) {
     phone: userData.phone ?? profileSummary.phone,
     email: userData.email ?? profileSummary.email,
     university: userData.university ?? profileSummary.university,
+    role: userData.role ?? 'student',
     profileImage: userData.profile_image ?? null,
     avatarPlaceholder: toInitials(resolvedName),
   }
@@ -29,7 +32,7 @@ export async function getUserProfile() {
   const localUser = getCurrentUser()
 
   try {
-    const response = await fetch(`http://localhost:5000/api/users/${currentUserId}`)
+    const response = await fetch(`${USERS_API_BASE}/${currentUserId}`)
     if (!response.ok) {
       throw new Error(`Profile fetch failed: ${response.status}`)
     }
@@ -45,4 +48,34 @@ export async function getUserProfile() {
       profileActions,
     }
   }
+}
+
+export async function changePassword(userId, currentPassword, newPassword) {
+  const response = await fetch(`${USERS_API_BASE}/change-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, currentPassword, newPassword }),
+  })
+
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}))
+    throw new Error(result?.message || `Failed to change password: ${response.status}`)
+  }
+
+  return response.json()
+}
+
+export async function submitFeedback(userId, message) {
+  const response = await fetch(`${USERS_API_BASE}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, message }),
+  })
+
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}))
+    throw new Error(result?.message || `Failed to submit feedback: ${response.status}`)
+  }
+
+  return response.json()
 }
