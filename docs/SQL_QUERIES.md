@@ -337,3 +337,133 @@ UPDATE shuttles SET seats_available = seats_available - 1 WHERE id = ?;
 SHOW INDEX FROM gatepasses;
 SHOW INDEX FROM campus_logs;
 ```
+
+---
+
+## 14. Transactions & TCL (Transaction Control Language)
+
+### TCL Commands Used
+
+| Command | Where Used | Purpose |
+|---|---|---|
+| `START TRANSACTION` | 5 controllers + Script 8A, 8B, 8C | Begin atomic operation |
+| `COMMIT` | All 5 transaction controllers | Make changes permanent |
+| `ROLLBACK` | All 5 transaction controllers (catch blocks) | Undo all changes on failure |
+| `SAVEPOINT` | Script 8C (gatepass demo) | Create checkpoint within transaction |
+| `ROLLBACK TO SAVEPOINT` | Script 8C | Partial undo within transaction |
+
+### Transaction Flows in the Application (5 total)
+
+| # | Operation | Controller | Steps in Transaction |
+|---|---|---|---|
+| 1 | Shuttle booking | `shuttleController.js` | BEGIN → check duplicate → SELECT FOR UPDATE → INSERT booking → UPDATE seats → COMMIT/ROLLBACK |
+| 2 | Claim approval | `lostFoundController.js` | BEGIN → SELECT claim FOR UPDATE → UPDATE claim status → UPDATE item to 'claimed' → COMMIT/ROLLBACK |
+| 3 | Gatepass status | `gatepassController.js` | BEGIN → SELECT gatepass FOR UPDATE → UPDATE status → INSERT campus_log → COMMIT/ROLLBACK |
+| 4 | Add comment | `communityController.js` | BEGIN → INSERT comment → UPDATE post comment_count → COMMIT/ROLLBACK |
+| 5 | Submit review | `messController.js` | BEGIN → INSERT review → SELECT AVG/COUNT → UPDATE menu aggregates → COMMIT/ROLLBACK |
+
+### SAVEPOINT Example (Script 8C)
+```sql
+START TRANSACTION;
+INSERT INTO gatepasses (...) VALUES (...);
+SAVEPOINT before_status_change;
+UPDATE gatepasses SET status = 'Approved' WHERE ...;
+-- Undo ONLY the status change:
+ROLLBACK TO SAVEPOINT before_status_change;
+-- Insert is kept, status reverts to 'Requested'
+COMMIT;
+```
+
+### Recovery Demo (Script 8B)
+```sql
+SELECT seats_available FROM shuttles WHERE id = 2;  -- e.g., 8
+START TRANSACTION;
+INSERT INTO shuttle_bookings (...);
+UPDATE shuttles SET seats_available = seats_available - 1 WHERE id = 2;
+ROLLBACK;  -- Simulate failure
+SELECT seats_available FROM shuttles WHERE id = 2;  -- Still 8!
+```
+
+---
+
+## 15. Concurrency Control Protocols
+
+### A. Lock-Based Protocol (Pessimistic Locking)
+
+**Row-level lock with FOR UPDATE:**
+```sql
+SELECT id, seats_available FROM shuttles WHERE id = ? FOR UPDATE;
+-- This row is now LOCKED — other transactions WAIT until COMMIT/ROLLBACK
+```
+**Used in:** Shuttle booking, gatepass status update, claim approval (3 controllers)
+
+**Table-level lock (Script 8D):**
+```sql
+LOCK TABLES shuttles READ;   -- Others can read, cannot write
+UNLOCK TABLES;
+LOCK TABLES shuttles WRITE;  -- Others cannot read or write
+UNLOCK TABLES;
+```
+
+### B. Timestamp-Based Protocol (Optimistic Locking)
+
+Every table has `updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`.
+
+**Conflict detection (Script 8E):**
+```sql
+SET @saved_timestamp = (SELECT updated_at FROM shuttles WHERE id = 1);
+UPDATE shuttles SET route = 'New Route'
+WHERE id = 1 AND updated_at = @saved_timestamp;
+SELECT ROW_COUNT();  -- 1 = success, 0 = conflict (another user modified it)
+```
+
+### C. Validation-Based Protocol
+
+| Validation | Where | How |
+|---|---|---|
+| Duplicate booking check | Shuttle booking | `SELECT COUNT(*) WHERE user_id=? AND shuttle_id=?` before INSERT |
+| Status check before update | Gatepass, claim approval | Check current status before allowing transition |
+| Email uniqueness | Registration | UNIQUE KEY `uq_users_email` at database level |
+| Composite uniqueness | Booking | UNIQUE KEY `uq_booking_user_shuttle(user_id, shuttle_id)` |
+
+---
+
+## 16. ACID Properties — Project Evidence
+
+| Property | How Demonstrated | Evidence |
+|---|---|---|
+| **Atomicity** | ROLLBACK undoes all operations on failure | Script 8B proves data unchanged after ROLLBACK. All 5 controllers have try/catch with rollback. |
+| **Consistency** | Constraints enforce valid data | 8 FKs, 5 UNIQUEs, 5 ENUMs, NOT NULL constraints |
+| **Isolation** | Row locks prevent concurrent interference | `SELECT ... FOR UPDATE` in 3 controllers. InnoDB default: `REPEATABLE READ` |
+| **Durability** | COMMIT persists to disk via WAL | InnoDB redo log. `innodb_flush_log_at_trx_commit = 1` |
+
+Verify:
+```sql
+SELECT @@transaction_isolation;          -- REPEATABLE-READ
+SHOW VARIABLES LIKE 'innodb_flush_log_at_trx_commit';  -- 1
+```
+
+---
+
+## 17. Stored Procedure with Transaction (sp_book_shuttle)
+
+### SP3: `sp_book_shuttle(user_id, shuttle_id)`
+```sql
+CALL sp_book_shuttle(2, 3);
+```
+**Demonstrates:** START TRANSACTION, SELECT ... FOR UPDATE, DECLARE, EXIT HANDLER FOR SQLEXCEPTION, validation check, INSERT, UPDATE, COMMIT, ROLLBACK — all inside a single stored procedure.
+
+```sql
+-- Successful booking:
+-- Result: 'SUCCESS: Booked shuttle 3 for user 2. Seats remaining: 14'
+
+-- Duplicate attempt:
+-- Result: 'REJECTED: Duplicate booking not allowed'
+
+-- No seats:
+-- Result: 'REJECTED: No seats available'
+
+-- SQL error:
+-- Result: 'ERROR: Booking failed — transaction rolled back'
+```
+

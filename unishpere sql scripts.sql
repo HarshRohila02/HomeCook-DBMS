@@ -545,3 +545,340 @@ CALL sp_mess_monthly_report(4, 2026);
 -- UPDATE gatepasses SET status = 'SecurityOut' WHERE id = 1;
 -- COMMIT;
 -- (or ROLLBACK; to undo)
+
+SHOW FULL TABLES WHERE TABLE_TYPE='VIEW';
+
+SHOW PROCEDURE STATUS WHERE Db='unisphere_db';
+
+SHOW TRIGGERS;
+
+
+-- ============================================================
+-- SCRIPT 8: TRANSACTIONS, CONCURRENCY & RECOVERY DEMOS
+-- Run these in MySQL Workbench to demonstrate DBMS concepts
+-- ============================================================
+
+USE unisphere_db;
+
+-- ============================================================
+-- 8A: SHUTTLE BOOKING — FULL TRANSACTION WITH ROW LOCKING
+-- Demonstrates: START TRANSACTION, SELECT ... FOR UPDATE,
+--               validation check, INSERT, UPDATE, COMMIT
+-- ACID: Atomicity (all or nothing), Isolation (row lock)
+-- ============================================================
+
+-- Step 0: Check current state BEFORE transaction
+SELECT id, shuttle_code, seats_available FROM shuttles WHERE id = 1;
+
+START TRANSACTION;
+
+-- Step 1: Acquire exclusive row lock on shuttle (Lock-Based Protocol)
+-- Other transactions trying to read this row FOR UPDATE will WAIT
+SELECT id, seats_available
+FROM shuttles
+WHERE id = 1
+FOR UPDATE;
+
+-- Step 2: Validation-Based Protocol — check for duplicate booking
+SELECT COUNT(*) AS existing_bookings
+FROM shuttle_bookings
+WHERE user_id = 1 AND shuttle_id = 1 AND booking_status = 'Booked';
+-- If count > 0, we should ROLLBACK (duplicate not allowed)
+
+-- Step 3: Insert booking record
+INSERT INTO shuttle_bookings (user_id, shuttle_id, booking_status, booked_at)
+VALUES (1, 1, 'Booked', NOW());
+
+-- Step 4: Decrement available seats atomically
+UPDATE shuttles SET seats_available = seats_available - 1 WHERE id = 1;
+
+-- Step 5: Verify the changes within transaction
+SELECT id, shuttle_code, seats_available FROM shuttles WHERE id = 1;
+SELECT * FROM shuttle_bookings WHERE user_id = 1 AND shuttle_id = 1 ORDER BY id DESC LIMIT 1;
+
+-- Step 6: Make changes permanent
+COMMIT;
+
+-- Verify AFTER commit — changes are durable (ACID Durability)
+SELECT id, shuttle_code, seats_available FROM shuttles WHERE id = 1;
+
+
+-- ============================================================
+-- 8B: RECOVERY DEMO — ROLLBACK RESTORES ORIGINAL STATE
+-- Demonstrates: ROLLBACK undoes ALL changes (ACID Atomicity)
+-- This proves the recovery system works
+-- ============================================================
+
+-- Step 0: Record current state
+SELECT id, shuttle_code, seats_available FROM shuttles WHERE id = 2;
+-- Remember this value (e.g., seats_available = 8)
+
+START TRANSACTION;
+
+-- Make changes
+INSERT INTO shuttle_bookings (user_id, shuttle_id, booking_status, booked_at)
+VALUES (2, 2, 'Booked', NOW());
+
+UPDATE shuttles SET seats_available = seats_available - 1 WHERE id = 2;
+
+-- Check inside transaction — seats decreased
+SELECT seats_available FROM shuttles WHERE id = 2;
+
+-- SIMULATE FAILURE: Rollback instead of commit
+ROLLBACK;
+
+-- Verify AFTER rollback — data is UNCHANGED (recovery successful!)
+SELECT id, shuttle_code, seats_available FROM shuttles WHERE id = 2;
+-- Expected: seats_available is same as Step 0 (ROLLBACK undid everything)
+-- This demonstrates InnoDB's undo log recovery mechanism
+
+
+-- ============================================================
+-- 8C: SAVEPOINT — PARTIAL ROLLBACK WITHIN A TRANSACTION
+-- Demonstrates: SAVEPOINT, ROLLBACK TO SAVEPOINT
+-- Use case: Undo only the status change, keep the gatepass insert
+-- ============================================================
+
+START TRANSACTION;
+
+-- Step 1: Insert a new gatepass
+INSERT INTO gatepasses (user_id, gatepass_code, reason, destination, out_date, time_out, expected_return_time, status)
+VALUES (
+  (SELECT id FROM users LIMIT 1),
+  CONCAT('GP-TEST-', FLOOR(RAND() * 100000)),
+  'Savepoint test trip',
+  'Delhi',
+  CURDATE(),
+  '10:00:00',
+  '18:00:00',
+  'Requested'
+);
+
+-- Verify gatepass was inserted
+SELECT id, gatepass_code, status FROM gatepasses WHERE reason = 'Savepoint test trip';
+
+-- Step 2: Create SAVEPOINT after the insert
+SAVEPOINT before_status_change;
+
+-- Step 3: Try updating the status to Approved
+UPDATE gatepasses SET status = 'Approved' WHERE reason = 'Savepoint test trip';
+
+-- Verify status changed
+SELECT id, gatepass_code, status FROM gatepasses WHERE reason = 'Savepoint test trip';
+-- Expected: status = 'Approved'
+
+-- Step 4: Oops! We want to UNDO only the status change, but KEEP the insert
+ROLLBACK TO SAVEPOINT before_status_change;
+
+-- Verify: gatepass still exists (INSERT was kept), but status reverted
+SELECT id, gatepass_code, status FROM gatepasses WHERE reason = 'Savepoint test trip';
+-- Expected: status = 'Requested' (status change was undone)
+-- The INSERT is still intact (partial rollback!)
+
+COMMIT;
+
+-- Cleanup test data
+DELETE FROM gatepasses WHERE reason = 'Savepoint test trip';
+
+
+-- ============================================================
+-- 8D: TABLE-LEVEL LOCKING (vs ROW-LEVEL FOR UPDATE)
+-- Demonstrates: LOCK TABLES, UNLOCK TABLES
+-- Note: LOCK TABLES is a different granularity than FOR UPDATE
+-- ============================================================
+
+-- Row-level lock (what our app uses) — only locks specific rows:
+--   SELECT * FROM shuttles WHERE id = 1 FOR UPDATE;
+--   (other rows in shuttles table remain accessible)
+
+-- Table-level lock — locks ENTIRE table:
+LOCK TABLES shuttles READ;
+-- Now: current session can only READ shuttles
+-- Other sessions can also READ but CANNOT WRITE
+SELECT * FROM shuttles;
+UNLOCK TABLES;
+
+LOCK TABLES shuttles WRITE;
+-- Now: current session can READ and WRITE
+-- Other sessions CANNOT read OR write shuttles
+SELECT * FROM shuttles;
+-- Perform updates if needed here
+UNLOCK TABLES;
+-- Table is now unlocked for all sessions
+
+-- COMPARISON for viva:
+-- | Feature         | FOR UPDATE (row lock) | LOCK TABLES (table lock) |
+-- | Granularity     | Row-level             | Table-level              |
+-- | Inside TXN?     | Yes                   | No (auto-commits)        |
+-- | Concurrency     | High (other rows ok)  | Low (entire table locked) |
+-- | Our app uses    | ✅ Yes                | Demo only                |
+
+
+-- ============================================================
+-- 8E: OPTIMISTIC LOCKING / TIMESTAMP-BASED PROTOCOL
+-- Demonstrates: Using updated_at for conflict detection
+-- If another user modified the row since we last read it,
+-- our UPDATE will affect 0 rows → conflict detected
+-- ============================================================
+
+-- Step 1: Read current data + its timestamp
+SELECT id, route, seats_available, updated_at
+FROM shuttles WHERE id = 1;
+-- Suppose updated_at = '2026-04-28 10:00:00'
+
+-- Step 2: User works on the data (e.g., editing a form)...
+-- Meanwhile, another user might modify this row
+
+-- Step 3: Update ONLY if timestamp hasn't changed since we read it
+-- Replace the timestamp below with the actual value from Step 1
+SET @saved_timestamp = (SELECT updated_at FROM shuttles WHERE id = 1);
+
+UPDATE shuttles
+SET route = 'Hostel A -> Academic Block'
+WHERE id = 1 AND updated_at = @saved_timestamp;
+
+-- Check how many rows were affected
+SELECT ROW_COUNT() AS rows_affected;
+-- If 1 → Success! No conflict, our update went through
+-- If 0 → Conflict! Another user modified it. Must re-read and retry.
+
+-- This is the Timestamp-Based Protocol:
+-- Every table has: updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- We use the timestamp as a "version number" for conflict detection
+
+
+-- ============================================================
+-- 8F: STORED PROCEDURE WITH TRANSACTION + LOCKING
+-- Demonstrates: Full transaction inside a procedure
+-- Uses: DECLARE, HANDLER, START TRANSACTION, FOR UPDATE,
+--       validation, INSERT, UPDATE, COMMIT, ROLLBACK
+-- ============================================================
+
+DELIMITER $$
+CREATE PROCEDURE sp_book_shuttle(
+  IN p_user_id BIGINT,
+  IN p_shuttle_id BIGINT
+)
+BEGIN
+  DECLARE v_seats INT DEFAULT 0;
+  DECLARE v_existing INT DEFAULT 0;
+
+  -- Error handler: if ANY SQL error occurs, rollback everything
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    SELECT 'ERROR: Booking failed — transaction rolled back' AS result, 0 AS success;
+  END;
+
+  START TRANSACTION;
+
+  -- 1. Lock the shuttle row (Pessimistic / Lock-Based Protocol)
+  SELECT seats_available INTO v_seats
+  FROM shuttles
+  WHERE id = p_shuttle_id
+  FOR UPDATE;
+
+  -- 2. Validation-Based Protocol: check for duplicate booking
+  SELECT COUNT(*) INTO v_existing
+  FROM shuttle_bookings
+  WHERE user_id = p_user_id
+    AND shuttle_id = p_shuttle_id
+    AND booking_status = 'Booked';
+
+  IF v_existing > 0 THEN
+    ROLLBACK;
+    SELECT 'REJECTED: Duplicate booking not allowed' AS result, 0 AS success;
+  ELSEIF v_seats IS NULL THEN
+    ROLLBACK;
+    SELECT 'REJECTED: Shuttle not found' AS result, 0 AS success;
+  ELSEIF v_seats <= 0 THEN
+    ROLLBACK;
+    SELECT 'REJECTED: No seats available' AS result, 0 AS success;
+  ELSE
+    -- 3. Insert booking
+    INSERT INTO shuttle_bookings (user_id, shuttle_id, booking_status, booked_at)
+    VALUES (p_user_id, p_shuttle_id, 'Booked', NOW());
+
+    -- 4. Decrement seats atomically
+    UPDATE shuttles
+    SET seats_available = seats_available - 1
+    WHERE id = p_shuttle_id;
+
+    COMMIT;
+    SELECT CONCAT('SUCCESS: Booked shuttle ', p_shuttle_id, ' for user ', p_user_id,
+                  '. Seats remaining: ', v_seats - 1) AS result, 1 AS success;
+  END IF;
+END$$
+DELIMITER ;
+
+-- Test the procedure:
+-- CALL sp_book_shuttle(2, 3);
+-- CALL sp_book_shuttle(2, 3);  -- Second call should say "Duplicate booking"
+
+
+-- ============================================================
+-- 8G: ACID PROPERTIES — SUMMARY WITH PROJECT EXAMPLES
+-- (For viva reference — explains how our project satisfies ACID)
+-- ============================================================
+
+-- ATOMICITY (All or Nothing):
+--   ✅ All multi-step operations use START TRANSACTION + COMMIT/ROLLBACK
+--   ✅ If shuttle booking fails mid-way → ROLLBACK undoes INSERT + UPDATE
+--   ✅ If claim approval fails → ROLLBACK undoes both claim + item update
+--   ✅ Script 8B above PROVES rollback restores original data
+--
+-- CONSISTENCY (Valid State → Valid State):
+--   ✅ 8 FOREIGN KEY constraints prevent orphan records
+--   ✅ 5 UNIQUE constraints prevent duplicate data
+--   ✅ 5 ENUM types restrict column values to valid options
+--   ✅ NOT NULL constraints prevent missing required data
+--   ✅ Application validates input before INSERT/UPDATE
+--
+-- ISOLATION (Concurrent transactions don't interfere):
+--   ✅ SELECT ... FOR UPDATE provides exclusive row locks
+--   ✅ InnoDB default isolation level: REPEATABLE READ
+--   ✅ Shuttle booking locks the row → concurrent bookings wait in queue
+--   ✅ Gatepass status update locks row → prevents race conditions
+--   To verify: SELECT @@transaction_isolation;
+--
+-- DURABILITY (Committed data survives crash):
+--   ✅ InnoDB uses Write-Ahead Logging (redo log / ib_logfile)
+--   ✅ After COMMIT, data is flushed to disk
+--   ✅ Even if server crashes after COMMIT, data is recovered from redo log
+--   ✅ innodb_flush_log_at_trx_commit = 1 (default) ensures this
+--   To verify: SHOW VARIABLES LIKE 'innodb_flush_log_at_trx_commit';
+
+
+-- ============================================================
+-- 8H: RECOVERY SYSTEM CONCEPTS
+-- (For viva reference — explains MySQL/InnoDB recovery)
+-- ============================================================
+
+-- InnoDB Recovery Mechanisms:
+--
+-- 1. UNDO LOG (Rollback Segment):
+--    - Stores old values of modified rows
+--    - Used by ROLLBACK to restore pre-transaction state
+--    - Also used for MVCC (Multi-Version Concurrency Control)
+--    To see: SHOW ENGINE INNODB STATUS;
+--
+-- 2. REDO LOG (Write-Ahead Log):
+--    - Stores new values BEFORE writing to data files
+--    - If crash happens after COMMIT but before disk write,
+--      InnoDB replays redo log on startup → data recovered
+--    To see: SHOW VARIABLES LIKE 'innodb_log%';
+--
+-- 3. CHECKPOINT:
+--    - Periodically flushes dirty pages from buffer pool to disk
+--    - Reduces recovery time after crash
+--    To see: SHOW ENGINE INNODB STATUS; (look for "Log sequence number")
+--
+-- 4. CRASH RECOVERY (automatic on restart):
+--    - Phase 1: Redo — replay committed transactions from redo log
+--    - Phase 2: Undo — rollback uncommitted transactions from undo log
+--    - Result: database returns to last consistent state
+
+-- Verify InnoDB settings:
+SHOW VARIABLES LIKE 'innodb_flush_log_at_trx_commit';
+SELECT @@transaction_isolation;
+SHOW VARIABLES LIKE 'innodb_log_file_size';
